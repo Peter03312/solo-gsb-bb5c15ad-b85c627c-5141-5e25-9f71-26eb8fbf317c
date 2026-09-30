@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: subtitle-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-subtitle}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-subtitle}
+      POSTGRES_DB: ${POSTGRES_DB:-subtitle}
+    ports:
+      # 仅用于本机调试；如不需要可删除此映射
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - subtitle-pgdata:/var/lib/postgresql/data
+      # 首次启动自动执行：建表、索引、种子用户
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-subtitle} -d ${POSTGRES_DB:-subtitle}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: subtitle-app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-subtitle}:${POSTGRES_PASSWORD:-subtitle}@db:5432/${POSTGRES_DB:-subtitle}
+      PORT: "4000"
+      WEB_DIST: /app/public
+    ports:
+      - "${APP_PORT:-8080}:4000"
+    restart: unless-stopped
+
+volumes:
+  subtitle-pgdata:
